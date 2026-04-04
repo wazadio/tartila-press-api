@@ -1,3 +1,4 @@
+from datetime import datetime, date
 from pydantic import BaseModel, EmailStr, field_validator
 from typing import Optional, List, Literal
 
@@ -131,7 +132,7 @@ class GenreCreate(GenreBase):
 
 class GenreOut(GenreBase):
     id: int
-    created_at: Optional[str] = None
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -149,7 +150,7 @@ class WriterOut(AuthorBase):
     id: int
     user_id: int
     email: str
-    created_at: Optional[str] = None
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -195,11 +196,11 @@ class TransactionOut(BaseModel):
     customer_phone: str
     notes: Optional[str] = None
     status: Literal["paid", "unpaid"]
-    delivery_deadline: Optional[str] = None
+    delivery_deadline: Optional[date] = None
     bank_name: str
     bank_account_name: str
     bank_account_number: str
-    created_at: Optional[str] = None
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
