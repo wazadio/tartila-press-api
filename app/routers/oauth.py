@@ -13,7 +13,7 @@ from app.email import send_welcome_email
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
-REDIRECT_URI = "https://color-max-addition-fibre.trycloudflare.com/api/auth/google/callback"
+REDIRECT_URI = os.getenv("REDIRECT_URI", "http://localhost:3001/api/auth/google/callback")
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
