@@ -1,6 +1,5 @@
 import asyncio
 import os
-import sqlite3
 from datetime import datetime, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
@@ -52,7 +51,7 @@ def _as_wib(value: Optional[str]) -> Optional[str]:
     return dt.astimezone(ZoneInfo("Asia/Jakarta")).isoformat(timespec="seconds")
 
 
-def _to_transaction_out(row: sqlite3.Row) -> dict:
+def _to_transaction_out(row) -> dict:
     out = dict(row)
     out["created_at"] = _as_wib(out.get("created_at"))
     out["bank_name"] = _bank()
@@ -102,10 +101,10 @@ def payment_config():
 def create_transaction(
     body: TransactionCreate,
     background_tasks: BackgroundTasks,
-    db: sqlite3.Connection = Depends(get_db),
+    db = Depends(get_db),
     authorization: Optional[str] = Header(default=None),
 ):
-    package_row = db.execute("SELECT * FROM packages WHERE id = ?", (body.package_id,)).fetchone()
+    package_row = db.execute("SELECT * FROM packages WHERE id = %s", (body.package_id,)).fetchone()
     if not package_row:
         raise HTTPException(status_code=404, detail="Package not found")
 
@@ -139,7 +138,7 @@ def create_transaction(
             user_id, package_id, package_name, package_type, unit_price, chapters, total_amount,
             book_title, genre, customer_name, customer_email, customer_phone, notes, status, delivery_deadline
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unpaid', NULL)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'unpaid', NULL) RETURNING id
         """,
         (
             user_id,
@@ -157,9 +156,10 @@ def create_transaction(
             body.notes.strip() if body.notes else None,
         ),
     )
+    new_id = cur.fetchone()["id"]
     db.commit()
 
-    row = db.execute("SELECT * FROM transactions WHERE id = ?", (cur.lastrowid,)).fetchone()
+    row = db.execute("SELECT * FROM transactions WHERE id = %s", (new_id,)).fetchone()
     background_tasks.add_task(
         _send_payment_invoice,
         body.customer_email,
@@ -174,7 +174,7 @@ def create_transaction(
 
 @router.get("", response_model=list[TransactionOut])
 def list_transactions(
-    db: sqlite3.Connection = Depends(get_db),
+    db = Depends(get_db),
     _: dict = Depends(require_admin),
 ):
     rows = db.execute(
@@ -192,11 +192,11 @@ def list_transactions(
 
 @router.get("/mine", response_model=list[TransactionOut])
 def list_my_transactions(
-    db: sqlite3.Connection = Depends(get_db),
+    db = Depends(get_db),
     user: dict = Depends(get_current_user),
 ):
     rows = db.execute(
-        "SELECT * FROM transactions WHERE user_id = ? ORDER BY id DESC",
+        "SELECT * FROM transactions WHERE user_id = %s ORDER BY id DESC",
         (int(user["sub"]),),
     ).fetchall()
     return [_to_transaction_out(r) for r in rows]
@@ -206,10 +206,10 @@ def list_my_transactions(
 def update_transaction(
     transaction_id: int,
     body: TransactionUpdate,
-    db: sqlite3.Connection = Depends(get_db),
+    db = Depends(get_db),
     _: dict = Depends(require_admin),
 ):
-    row = db.execute("SELECT * FROM transactions WHERE id = ?", (transaction_id,)).fetchone()
+    row = db.execute("SELECT * FROM transactions WHERE id = %s", (transaction_id,)).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Transaction not found")
 
@@ -232,9 +232,9 @@ def update_transaction(
         deadline = updates["delivery_deadline"]
         updates["delivery_deadline"] = deadline.strip() if deadline else None
 
-    fields = ", ".join(f"{k} = ?" for k in updates)
-    db.execute(f"UPDATE transactions SET {fields} WHERE id = ?", (*updates.values(), transaction_id))
+    fields = ", ".join(f"{k} = %s" for k in updates)
+    db.execute(f"UPDATE transactions SET {fields} WHERE id = %s", (*updates.values(), transaction_id))
     db.commit()
 
-    updated_row = db.execute("SELECT * FROM transactions WHERE id = ?", (transaction_id,)).fetchone()
+    updated_row = db.execute("SELECT * FROM transactions WHERE id = %s", (transaction_id,)).fetchone()
     return _to_transaction_out(updated_row)

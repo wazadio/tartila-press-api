@@ -1,7 +1,6 @@
 import asyncio
 import os
 import secrets
-import sqlite3
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 
@@ -26,8 +25,8 @@ def _make_verify_link(token: str) -> str:
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-def register(body: RegisterRequest, background_tasks: BackgroundTasks, db: sqlite3.Connection = Depends(get_db)):
-    existing = db.execute("SELECT id FROM users WHERE email = ?", (body.email,)).fetchone()
+def register(body: RegisterRequest, background_tasks: BackgroundTasks, db = Depends(get_db)):
+    existing = db.execute("SELECT id FROM users WHERE email = %s", (body.email,)).fetchone()
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
 
@@ -35,12 +34,11 @@ def register(body: RegisterRequest, background_tasks: BackgroundTasks, db: sqlit
     verification_token = secrets.token_urlsafe(32)
 
     cur = db.execute(
-        "INSERT INTO users (name, email, password, role, is_verified, verification_token) VALUES (?, ?, ?, 'user', 0, ?)",
+        "INSERT INTO users (name, email, password, role, is_verified, verification_token) VALUES (%s, %s, %s, 'user', FALSE, %s) RETURNING id",
         (body.name, body.email, hashed, verification_token),
     )
+    user_id = cur.fetchone()["id"]
     db.commit()
-
-    user_id = cur.lastrowid
     # Return a token but mark user as unverified — FE will redirect to check-email
     token = create_access_token({"sub": str(user_id), "email": body.email, "name": body.name, "role": "user"})
 
@@ -54,8 +52,8 @@ def register(body: RegisterRequest, background_tasks: BackgroundTasks, db: sqlit
 
 
 @router.post("/register/writer", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-def register_writer(body: WriterRegisterRequest, background_tasks: BackgroundTasks, db: sqlite3.Connection = Depends(get_db)):
-    existing = db.execute("SELECT id FROM users WHERE email = ?", (body.email,)).fetchone()
+def register_writer(body: WriterRegisterRequest, background_tasks: BackgroundTasks, db = Depends(get_db)):
+    existing = db.execute("SELECT id FROM users WHERE email = %s", (body.email,)).fetchone()
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
 
@@ -63,15 +61,15 @@ def register_writer(body: WriterRegisterRequest, background_tasks: BackgroundTas
     verification_token = secrets.token_urlsafe(32)
 
     cur = db.execute(
-        "INSERT INTO users (name, email, password, role, is_verified, verification_token) VALUES (?, ?, ?, 'writer', 0, ?)",
+        "INSERT INTO users (name, email, password, role, is_verified, verification_token) VALUES (%s, %s, %s, 'writer', FALSE, %s) RETURNING id",
         (body.name, body.email, hashed, verification_token),
     )
+    user_id = cur.fetchone()["id"]
     db.commit()
-    user_id = cur.lastrowid
 
     # Create an authors row linked to this user; writer completes profile from dashboard
     db.execute(
-        "INSERT INTO authors (user_id, name, genres) VALUES (?, ?, ?)",
+        "INSERT INTO authors (user_id, name, genres) VALUES (%s, %s, %s)",
         (user_id, body.name, json.dumps([])),
     )
     db.commit()
@@ -95,15 +93,15 @@ def _send_welcome(email: str, name: str):
 
 
 @router.get("/verify")
-def verify_email(token: str, db: sqlite3.Connection = Depends(get_db)):
-    user = db.execute("SELECT * FROM users WHERE verification_token = ?", (token,)).fetchone()
+def verify_email(token: str, db = Depends(get_db)):
+    user = db.execute("SELECT * FROM users WHERE verification_token = %s", (token,)).fetchone()
     if not user:
         raise HTTPException(status_code=400, detail="Invalid or expired verification link.")
     if user["is_verified"]:
         raise HTTPException(status_code=400, detail="Email already verified.")
 
     db.execute(
-        "UPDATE users SET is_verified = 1, verification_token = NULL WHERE id = ?",
+        "UPDATE users SET is_verified = TRUE, verification_token = NULL WHERE id = %s",
         (user["id"],),
     )
     db.commit()
@@ -124,8 +122,8 @@ def verify_email(token: str, db: sqlite3.Connection = Depends(get_db)):
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(body: LoginRequest, db: sqlite3.Connection = Depends(get_db)):
-    row = db.execute("SELECT * FROM users WHERE email = ?", (body.email,)).fetchone()
+def login(body: LoginRequest, db = Depends(get_db)):
+    row = db.execute("SELECT * FROM users WHERE email = %s", (body.email,)).fetchone()
     if not row or not verify_password(body.password, row["password"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
@@ -142,8 +140,8 @@ def login(body: LoginRequest, db: sqlite3.Connection = Depends(get_db)):
 
 
 @router.get("/me")
-def me(user: dict = Depends(get_current_user), db: sqlite3.Connection = Depends(get_db)):
-    row = db.execute("SELECT id, name, email, role, is_verified FROM users WHERE id = ?", (user["sub"],)).fetchone()
+def me(user: dict = Depends(get_current_user), db = Depends(get_db)):
+    row = db.execute("SELECT id, name, email, role, is_verified FROM users WHERE id = %s", (user["sub"],)).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="User not found")
     return dict(row)

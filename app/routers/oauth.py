@@ -84,15 +84,15 @@ async def google_callback(code: str = None, error: str = None, db=Depends(get_db
         return RedirectResponse(f"{FRONTEND_URL}/login?error=google_no_email")
 
     # Find or create user
-    user = db.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+    user = db.execute("SELECT * FROM users WHERE email = %s", (email,)).fetchone()
     is_new = not user
     if is_new:
         db.execute(
-            "INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, 'user')",
+            "INSERT INTO users (name, email, password, role) VALUES (%s, %s, %s, 'user')",
             (name, email, hash_password(secrets.token_hex(32))),
         )
         db.commit()
-        user = db.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+        user = db.execute("SELECT * FROM users WHERE email = %s", (email,)).fetchone()
         try:
             asyncio.run(send_welcome_email(email, name))
         except Exception as e:

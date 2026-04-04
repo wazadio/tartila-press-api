@@ -1,5 +1,4 @@
 import json
-import sqlite3
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -42,7 +41,7 @@ def _row_to_writer(row) -> dict:
 # ── Writer endpoints (must be before /{author_id}) ────────────────────────────
 
 @router.get("/writers", response_model=list[WriterOut])
-def list_writers(db: sqlite3.Connection = Depends(get_db), _: dict = Depends(require_admin)):
+def list_writers(db = Depends(get_db), _: dict = Depends(require_admin)):
     rows = db.execute("""
         SELECT a.id, a.user_id, a.name, a.photo, a.bio, a.nationality,
                a.books_published, a.genres, a.website, a.created_at,
@@ -56,14 +55,14 @@ def list_writers(db: sqlite3.Connection = Depends(get_db), _: dict = Depends(req
 
 
 @router.get("/me", response_model=WriterOut)
-def get_my_profile(db: sqlite3.Connection = Depends(get_db), user: dict = Depends(require_writer)):
+def get_my_profile(db = Depends(get_db), user: dict = Depends(require_writer)):
     row = db.execute("""
         SELECT a.id, a.user_id, a.name, a.photo, a.bio, a.nationality,
                a.books_published, a.genres, a.website, a.created_at,
                u.email
         FROM authors a
         JOIN users u ON u.id = a.user_id
-        WHERE a.user_id = ?
+        WHERE a.user_id = %s
     """, (user["sub"],)).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Writer profile not found")
@@ -71,8 +70,8 @@ def get_my_profile(db: sqlite3.Connection = Depends(get_db), user: dict = Depend
 
 
 @router.patch("/me", response_model=WriterOut)
-def update_my_profile(body: WriterUpdate, db: sqlite3.Connection = Depends(get_db), user: dict = Depends(require_writer)):
-    row = db.execute("SELECT id FROM authors WHERE user_id = ?", (user["sub"],)).fetchone()
+def update_my_profile(body: WriterUpdate, db = Depends(get_db), user: dict = Depends(require_writer)):
+    row = db.execute("SELECT id FROM authors WHERE user_id = %s", (user["sub"],)).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Writer profile not found")
 
@@ -91,16 +90,16 @@ def update_my_profile(body: WriterUpdate, db: sqlite3.Connection = Depends(get_d
         updates["website"] = body.website
 
     if updates:
-        sets = ", ".join(f"{k} = ?" for k in updates)
+        sets = ", ".join(f"{k} = %s" for k in updates)
         values = list(updates.values()) + [row["id"]]
-        db.execute(f"UPDATE authors SET {sets} WHERE id = ?", values)
+        db.execute(f"UPDATE authors SET {sets} WHERE id = %s", values)
         db.commit()
 
     updated = db.execute("""
         SELECT a.id, a.user_id, a.name, a.photo, a.bio, a.nationality,
                a.books_published, a.genres, a.website, a.created_at,
                u.email
-        FROM authors a JOIN users u ON u.id = a.user_id WHERE a.user_id = ?
+        FROM authors a JOIN users u ON u.id = a.user_id WHERE a.user_id = %s
     """, (user["sub"],)).fetchone()
     return _row_to_writer(updated)
 
@@ -108,14 +107,14 @@ def update_my_profile(body: WriterUpdate, db: sqlite3.Connection = Depends(get_d
 # ── Author CRUD ───────────────────────────────────────────────────────────────
 
 @router.get("", response_model=list[AuthorOut])
-def list_authors(db: sqlite3.Connection = Depends(get_db)):
+def list_authors(db = Depends(get_db)):
     rows = db.execute("SELECT * FROM authors ORDER BY id").fetchall()
     return [_row_to_author(r) for r in rows]
 
 
 @router.get("/{author_id}", response_model=AuthorOut)
-def get_author(author_id: int, db: sqlite3.Connection = Depends(get_db)):
-    row = db.execute("SELECT * FROM authors WHERE id = ?", (author_id,)).fetchone()
+def get_author(author_id: int, db = Depends(get_db)):
+    row = db.execute("SELECT * FROM authors WHERE id = %s", (author_id,)).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Author not found")
     return _row_to_author(row)
@@ -124,19 +123,20 @@ def get_author(author_id: int, db: sqlite3.Connection = Depends(get_db)):
 @router.post("", response_model=AuthorOut, status_code=status.HTTP_201_CREATED)
 def create_author(
     body: AuthorCreate,
-    db: sqlite3.Connection = Depends(get_db),
+    db = Depends(get_db),
     _: dict = Depends(require_admin),
 ):
     cur = db.execute(
         """INSERT INTO authors (name, photo, bio, nationality, books_published, genres, website)
-           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+           VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id""",
         (
             body.name, body.photo, body.bio, body.nationality,
             body.books_published, json.dumps(body.genres or []), body.website,
         ),
     )
+    new_id = cur.fetchone()["id"]
     db.commit()
-    row = db.execute("SELECT * FROM authors WHERE id = ?", (cur.lastrowid,)).fetchone()
+    row = db.execute("SELECT * FROM authors WHERE id = %s", (new_id,)).fetchone()
     return _row_to_author(row)
 
 
@@ -144,10 +144,10 @@ def create_author(
 def update_author(
     author_id: int,
     body: AuthorUpdate,
-    db: sqlite3.Connection = Depends(get_db),
+    db = Depends(get_db),
     _: dict = Depends(require_admin),
 ):
-    row = db.execute("SELECT * FROM authors WHERE id = ?", (author_id,)).fetchone()
+    row = db.execute("SELECT * FROM authors WHERE id = %s", (author_id,)).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Author not found")
 
@@ -159,25 +159,25 @@ def update_author(
     if not updates:
         return current
 
-    fields = ", ".join(f"{k} = ?" for k in updates)
-    db.execute(f"UPDATE authors SET {fields} WHERE id = ?", (*updates.values(), author_id))
+    fields = ", ".join(f"{k} = %s" for k in updates)
+    db.execute(f"UPDATE authors SET {fields} WHERE id = %s", (*updates.values(), author_id))
     db.commit()
-    row = db.execute("SELECT * FROM authors WHERE id = ?", (author_id,)).fetchone()
+    row = db.execute("SELECT * FROM authors WHERE id = %s", (author_id,)).fetchone()
     return _row_to_author(row)
 
 
 @router.delete("/{author_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_author(
     author_id: int,
-    db: sqlite3.Connection = Depends(get_db),
+    db = Depends(get_db),
     _: dict = Depends(require_admin),
 ):
-    row = db.execute("SELECT id, user_id FROM authors WHERE id = ?", (author_id,)).fetchone()
+    row = db.execute("SELECT id, user_id FROM authors WHERE id = %s", (author_id,)).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Author not found")
     # If linked to a user account (writer), delete the user too (cascades to authors row)
     if row["user_id"]:
-        db.execute("DELETE FROM users WHERE id = ?", (row["user_id"],))
+        db.execute("DELETE FROM users WHERE id = %s", (row["user_id"],))
     else:
-        db.execute("DELETE FROM authors WHERE id = ?", (author_id,))
+        db.execute("DELETE FROM authors WHERE id = %s", (author_id,))
     db.commit()
