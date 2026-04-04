@@ -1,8 +1,8 @@
-import asyncio
 import os
 import secrets
 
 import httpx
+from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import RedirectResponse
 
@@ -10,10 +10,7 @@ from app.auth import create_access_token, hash_password
 from app.database import get_db
 from app.email import send_welcome_email
 
-GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
-GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
-REDIRECT_URI = os.getenv("REDIRECT_URI", "http://localhost:3001/api/auth/google/callback")
+load_dotenv(dotenv_path="/app/.env", override=True)
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -24,11 +21,13 @@ router = APIRouter(prefix="/auth", tags=["oauth"])
 
 @router.get("/google")
 def google_login():
-    if not GOOGLE_CLIENT_ID:
+    google_client_id = os.getenv("GOOGLE_CLIENT_ID")
+    redirect_uri = os.getenv("REDIRECT_URI", "http://localhost:3001/api/auth/google/callback")
+    if not google_client_id:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Google OAuth not configured.")
     params = (
-        f"client_id={GOOGLE_CLIENT_ID}"
-        f"&redirect_uri={REDIRECT_URI}"
+        f"client_id={google_client_id}"
+        f"&redirect_uri={redirect_uri}"
         f"&response_type=code"
         f"&scope=openid%20email%20profile"
         f"&access_type=offline"
@@ -39,27 +38,32 @@ def google_login():
 
 @router.get("/google/callback")
 async def google_callback(code: str = None, error: str = None, db=Depends(get_db)):
+    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+    google_client_id = os.getenv("GOOGLE_CLIENT_ID")
+    google_client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
+    redirect_uri = os.getenv("REDIRECT_URI", "http://localhost:3001/api/auth/google/callback")
+
     if error or not code:
-        return RedirectResponse(f"{FRONTEND_URL}/login?error=google_denied")
+        return RedirectResponse(f"{frontend_url}/login?error=google_denied")
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             # Exchange code for tokens
             token_res = await client.post(GOOGLE_TOKEN_URL, data={
                 "code": code,
-                "client_id": GOOGLE_CLIENT_ID,
-                "client_secret": GOOGLE_CLIENT_SECRET,
-                "redirect_uri": REDIRECT_URI,
+                "client_id": google_client_id,
+                "client_secret": google_client_secret,
+                "redirect_uri": redirect_uri,
                 "grant_type": "authorization_code",
             })
             print(f"[oauth] token status={token_res.status_code} body={token_res.text[:300]}")
             if token_res.status_code != 200:
-                return RedirectResponse(f"{FRONTEND_URL}/login?error=google_token_failed")
+                return RedirectResponse(f"{frontend_url}/login?error=google_token_failed")
 
             tokens = token_res.json()
             access_token = tokens.get("access_token")
             if not access_token:
-                return RedirectResponse(f"{FRONTEND_URL}/login?error=google_token_failed")
+                return RedirectResponse(f"{frontend_url}/login?error=google_token_failed")
 
             # Fetch user info
             userinfo_res = await client.get(
@@ -68,20 +72,20 @@ async def google_callback(code: str = None, error: str = None, db=Depends(get_db
             )
             print(f"[oauth] userinfo status={userinfo_res.status_code}")
             if userinfo_res.status_code != 200:
-                return RedirectResponse(f"{FRONTEND_URL}/login?error=google_userinfo_failed")
+                return RedirectResponse(f"{frontend_url}/login?error=google_userinfo_failed")
 
             userinfo = userinfo_res.json()
     except httpx.ConnectTimeout:
         print("[oauth] ConnectTimeout reaching Google")
-        return RedirectResponse(f"{FRONTEND_URL}/login?error=google_timeout")
+        return RedirectResponse(f"{frontend_url}/login?error=google_timeout")
     except Exception as e:
         print(f"[oauth] Exception {type(e).__name__}: {e}")
-        return RedirectResponse(f"{FRONTEND_URL}/login?error=google_network_error")
+        return RedirectResponse(f"{frontend_url}/login?error=google_network_error")
 
     email = userinfo.get("email")
     name = userinfo.get("name") or email
     if not email:
-        return RedirectResponse(f"{FRONTEND_URL}/login?error=google_no_email")
+        return RedirectResponse(f"{frontend_url}/login?error=google_no_email")
 
     # Find or create user
     user = db.execute("SELECT * FROM users WHERE email = %s", (email,)).fetchone()
@@ -94,7 +98,7 @@ async def google_callback(code: str = None, error: str = None, db=Depends(get_db
         db.commit()
         user = db.execute("SELECT * FROM users WHERE email = %s", (email,)).fetchone()
         try:
-            asyncio.run(send_welcome_email(email, name))
+            await send_welcome_email(email, name)
         except Exception as e:
             print(f"[oauth] welcome email failed: {e}")
 
@@ -105,4 +109,4 @@ async def google_callback(code: str = None, error: str = None, db=Depends(get_db
         "role": user["role"],
     })
 
-    return RedirectResponse(f"{FRONTEND_URL}/auth/callback?token={jwt}")
+    return RedirectResponse(f"{frontend_url}/auth/callback?token={jwt}")
