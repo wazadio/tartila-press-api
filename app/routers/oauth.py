@@ -1,3 +1,4 @@
+import json
 import os
 import secrets
 
@@ -111,6 +112,13 @@ async def google_callback(code: str = None, error: str = None, state: str = "use
         )
         db.commit()
         user = db.execute("SELECT * FROM users WHERE email = %s", (email,)).fetchone()
+        # Create authors profile for writer role, same as normal writer registration
+        if intended_role == "writer":
+            db.execute(
+                "INSERT INTO authors (user_id, name, genres) VALUES (%s, %s, %s)",
+                (user["id"], name, json.dumps([])),
+            )
+            db.commit()
         background_tasks.add_task(send_welcome_email, email, name)
     else:
         # Existing user: mark verified (email confirmed via Google), preserve role
