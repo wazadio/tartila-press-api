@@ -87,12 +87,12 @@ def create_book(
 
     cur = db.execute(
         """INSERT INTO books
-           (title, author_id, cover, genre, published_year, pages, isbn, description, price, rating, featured, is_template, bidang_id)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+           (title, author_id, cover, genre, published_year, pages, isbn, description, synopsis, price, rating, featured, is_template, bidang_id)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
         (
             body.title, body.author_id, body.cover, body.genre,
             body.published_year, body.pages, body.isbn, body.description,
-            body.price, body.rating, body.featured, body.is_template, body.bidang_id,
+            body.synopsis, body.price, body.rating, body.featured, body.is_template, body.bidang_id,
         ),
     )
     new_id = cur.fetchone()["id"]

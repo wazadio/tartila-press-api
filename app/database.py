@@ -182,6 +182,7 @@ def init_db():
         ALTER TABLE genres
         ADD COLUMN IF NOT EXISTS bidang_id INTEGER REFERENCES bidang(id) ON DELETE SET NULL
     """)
+    cur.execute("ALTER TABLE books ADD COLUMN IF NOT EXISTS synopsis TEXT")
 
     conn.autocommit = False
     _seed(conn)

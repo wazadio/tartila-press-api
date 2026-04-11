@@ -60,6 +60,7 @@ class BookBase(BaseModel):
     pages: Optional[int] = None
     isbn: Optional[str] = None
     description: Optional[str] = None
+    synopsis: Optional[str] = None
     price: Optional[int] = 0
     rating: Optional[float] = 0.0
     featured: Optional[bool] = False
