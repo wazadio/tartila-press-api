@@ -412,6 +412,25 @@ async def upload_transaction_manuscript(
             detail="Manuscript upload is only for publishing service transactions.",
         )
 
+    # File count limit based on package type
+    # per_book  → max 1 file
+    # per_chapter → max = number of chapters ordered
+    try:
+        current_files = json.loads(row.get("manuscript_files") or "[]")
+    except (ValueError, TypeError):
+        current_files = []
+
+    package_type = row.get("package_type") or "per_book"
+    chapters_ordered = int(row.get("chapters") or 1)
+    max_files = 1 if package_type == "per_book" else chapters_ordered
+
+    if len(current_files) >= max_files:
+        limit_desc = "1 file" if max_files == 1 else f"{max_files} file (sesuai jumlah bab yang dipesan)"
+        raise HTTPException(
+            status_code=400,
+            detail=f"Batas upload tercapai. Maksimal {limit_desc}.",
+        )
+
     # File type validation
     ext = (file.filename or "").rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else ""
     if ext not in _ALLOWED_MANUSCRIPT_EXTS:
@@ -434,11 +453,6 @@ async def upload_transaction_manuscript(
     (_UPLOADS_DIR / filename).write_bytes(contents)
     url = f"/uploads/{filename}"
 
-    # Append URL to manuscript_files array
-    try:
-        current_files = json.loads(row.get("manuscript_files") or "[]")
-    except (ValueError, TypeError):
-        current_files = []
     current_files.append(url)
 
     db.execute(
