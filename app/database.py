@@ -145,6 +145,18 @@ def init_db():
         )
     """)
 
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS book_chapters (
+            id         SERIAL PRIMARY KEY,
+            book_id    INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+            number     INTEGER NOT NULL,
+            title      TEXT    NOT NULL,
+            price      INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (book_id, number)
+        )
+    """)
+
     # Idempotent column migrations
     cur.execute("""
         ALTER TABLE authors

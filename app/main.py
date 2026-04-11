@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.database import init_db
-from app.routers import auth, books, authors, packages, uploads, oauth, genres, transactions
+from app.routers import auth, books, authors, packages, uploads, oauth, genres, transactions, book_chapters
 
 UPLOADS_DIR = Path(__file__).parent.parent / "uploads"
 UPLOADS_DIR.mkdir(exist_ok=True)
@@ -36,6 +36,7 @@ app.include_router(uploads.router, prefix="/api")
 app.include_router(oauth.router, prefix="/api")
 app.include_router(genres.router, prefix="/api")
 app.include_router(transactions.router, prefix="/api")
+app.include_router(book_chapters.router, prefix="/api")
 
 
 @app.get("/")

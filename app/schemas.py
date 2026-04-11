@@ -215,3 +215,23 @@ class PaymentConfigOut(BaseModel):
 class TransactionUpdate(BaseModel):
     status: Optional[Literal["paid", "unpaid"]] = None
     delivery_deadline: Optional[str] = None
+
+
+# ── Book Chapters ─────────────────────────────────────────────────────────────
+
+class BookChapterBase(BaseModel):
+    number: int
+    title: str
+    price: int = 0
+
+
+class BookChapterCreate(BookChapterBase):
+    pass
+
+
+class BookChapterOut(BookChapterBase):
+    id: int
+    book_id: int
+
+    class Config:
+        from_attributes = True
