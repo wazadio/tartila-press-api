@@ -3,7 +3,7 @@ import secrets
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from fastapi.responses import RedirectResponse
 
 from app.auth import create_access_token, hash_password
@@ -47,7 +47,7 @@ def google_writer_login():
 
 
 @router.get("/google/callback")
-async def google_callback(code: str = None, error: str = None, state: str = "user", db=Depends(get_db)):
+async def google_callback(code: str = None, error: str = None, state: str = "user", background_tasks: BackgroundTasks = None, db=Depends(get_db)):
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
     google_client_id = os.getenv("GOOGLE_CLIENT_ID")
     google_client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
@@ -111,10 +111,7 @@ async def google_callback(code: str = None, error: str = None, state: str = "use
         )
         db.commit()
         user = db.execute("SELECT * FROM users WHERE email = %s", (email,)).fetchone()
-        try:
-            await send_welcome_email(email, name)
-        except Exception as e:
-            print(f"[oauth] welcome email failed: {e}")
+        background_tasks.add_task(send_welcome_email, email, name)
     else:
         # Existing user: mark verified (email confirmed via Google), preserve role
         db.execute(
