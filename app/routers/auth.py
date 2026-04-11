@@ -68,8 +68,9 @@ def register_writer(body: WriterRegisterRequest, background_tasks: BackgroundTas
     db.commit()
 
     # Create an authors row linked to this user; writer completes profile from dashboard
+    # is_verified=FALSE by default — admin must approve before profile goes public
     db.execute(
-        "INSERT INTO authors (user_id, name, genres) VALUES (%s, %s, %s)",
+        "INSERT INTO authors (user_id, name, genres, is_verified) VALUES (%s, %s, %s, FALSE)",
         (user_id, body.name, json.dumps([])),
     )
     db.commit()

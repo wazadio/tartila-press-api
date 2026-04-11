@@ -183,6 +183,15 @@ def init_db():
         ADD COLUMN IF NOT EXISTS bidang_id INTEGER REFERENCES bidang(id) ON DELETE SET NULL
     """)
     cur.execute("ALTER TABLE books ADD COLUMN IF NOT EXISTS synopsis TEXT")
+    # Admin-verified flag for authors: TRUE = visible in public listing
+    cur.execute("""
+        ALTER TABLE authors
+        ADD COLUMN IF NOT EXISTS is_verified BOOLEAN NOT NULL DEFAULT FALSE
+    """)
+    # Existing authors created directly by admin should be visible by default
+    cur.execute("""
+        UPDATE authors SET is_verified = TRUE WHERE user_id IS NULL AND is_verified = FALSE
+    """)
 
     conn.autocommit = False
     _seed(conn)

@@ -113,9 +113,10 @@ async def google_callback(code: str = None, error: str = None, state: str = "use
         db.commit()
         user = db.execute("SELECT * FROM users WHERE email = %s", (email,)).fetchone()
         # Create authors profile for writer role, same as normal writer registration
+        # is_verified=FALSE by default — admin must approve before profile is public
         if intended_role == "writer":
             db.execute(
-                "INSERT INTO authors (user_id, name, genres) VALUES (%s, %s, %s)",
+                "INSERT INTO authors (user_id, name, genres, is_verified) VALUES (%s, %s, %s, FALSE)",
                 (user["id"], name, json.dumps([])),
             )
             db.commit()

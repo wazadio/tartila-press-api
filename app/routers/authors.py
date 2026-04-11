@@ -16,6 +16,13 @@ def _row_to_author(row) -> dict:
     return d
 
 
+def _verify_author(author_id: int, verified: bool, db) -> dict:
+    db.execute("UPDATE authors SET is_verified = %s WHERE id = %s", (verified, author_id))
+    db.commit()
+    row = db.execute("SELECT * FROM authors WHERE id = %s", (author_id,)).fetchone()
+    return _row_to_author(row)
+
+
 def _row_to_writer(row) -> dict:
     genres = row["genres"]
     if isinstance(genres, str):
@@ -108,8 +115,32 @@ def update_my_profile(body: WriterUpdate, db = Depends(get_db), user: dict = Dep
 
 @router.get("", response_model=list[AuthorOut])
 def list_authors(db = Depends(get_db)):
+    """Public listing — only admin-verified authors."""
+    rows = db.execute("SELECT * FROM authors WHERE is_verified = TRUE ORDER BY id").fetchall()
+    return [_row_to_author(r) for r in rows]
+
+
+@router.get("/all", response_model=list[AuthorOut])
+def list_all_authors(db = Depends(get_db), _: dict = Depends(require_admin)):
+    """Admin only — all authors regardless of verification."""
     rows = db.execute("SELECT * FROM authors ORDER BY id").fetchall()
     return [_row_to_author(r) for r in rows]
+
+
+@router.patch("/{author_id}/verify", response_model=AuthorOut)
+def verify_author(author_id: int, db = Depends(get_db), _: dict = Depends(require_admin)):
+    row = db.execute("SELECT id FROM authors WHERE id = %s", (author_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Author not found")
+    return _verify_author(author_id, True, db)
+
+
+@router.patch("/{author_id}/unverify", response_model=AuthorOut)
+def unverify_author(author_id: int, db = Depends(get_db), _: dict = Depends(require_admin)):
+    row = db.execute("SELECT id FROM authors WHERE id = %s", (author_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Author not found")
+    return _verify_author(author_id, False, db)
 
 
 @router.get("/{author_id}", response_model=AuthorOut)

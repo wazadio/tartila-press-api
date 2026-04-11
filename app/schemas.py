@@ -44,6 +44,7 @@ class AuthorUpdate(AuthorBase):
 
 class AuthorOut(AuthorBase):
     id: int
+    is_verified: bool = False
 
     class Config:
         from_attributes = True
