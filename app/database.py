@@ -201,6 +201,7 @@ def init_db():
     cur.execute("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS stock_exhausted BOOLEAN NOT NULL DEFAULT FALSE")
     cur.execute("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS transaction_type TEXT NOT NULL DEFAULT 'publishing'")
     cur.execute("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS address TEXT")
+    cur.execute("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS manuscript_files TEXT NOT NULL DEFAULT '[]'")
 
     conn.autocommit = False
     _seed(conn)

@@ -205,6 +205,7 @@ class TransactionCreate(BaseModel):
     transaction_type: Literal["publishing", "book_sale"] = "publishing"
     quantity: Optional[int] = None   # for book_sale; maps to chapters
     address: Optional[str] = None    # delivery address for book_sale
+    manuscript_files: Optional[List[str]] = []  # list of uploaded file URLs
 
 
 class TransactionOut(BaseModel):
@@ -235,6 +236,7 @@ class TransactionOut(BaseModel):
     chapter_ids: Optional[List[int]] = []
     stock_exhausted: bool = False
     transaction_type: str = "publishing"
+    manuscript_files: Optional[List[str]] = []
 
     class Config:
         from_attributes = True

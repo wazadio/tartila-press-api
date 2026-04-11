@@ -1,11 +1,14 @@
 import asyncio
 import json
 import os
+import re
+import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Header, HTTPException, UploadFile, status
 
 from app.auth import decode_token, get_current_user, require_admin
 from app.database import get_db
@@ -71,6 +74,11 @@ def _to_transaction_out(row) -> dict:
         out["chapter_ids"] = []
     out["stock_exhausted"] = bool(out.get("stock_exhausted", False))
     out["transaction_type"] = out.get("transaction_type") or "publishing"
+    raw_files = out.get("manuscript_files", "[]")
+    try:
+        out["manuscript_files"] = json.loads(raw_files) if isinstance(raw_files, str) else (raw_files or [])
+    except (ValueError, TypeError):
+        out["manuscript_files"] = []
     return out
 
 
@@ -145,9 +153,9 @@ def create_transaction(
                 user_id, package_id, package_name, package_type, unit_price, chapters, total_amount,
                 book_title, genre, customer_name, customer_email, customer_phone,
                 notes, address, status, delivery_deadline,
-                book_id, chapter_ids, transaction_type
+                book_id, chapter_ids, transaction_type, manuscript_files
             )
-            VALUES (%s, NULL, %s, 'per_book', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'unpaid', NULL, %s, '[]', 'book_sale')
+            VALUES (%s, NULL, %s, 'per_book', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'unpaid', NULL, %s, '[]', 'book_sale', '[]')
             RETURNING id
             """,
             (
@@ -212,9 +220,9 @@ def create_transaction(
             user_id, package_id, package_name, package_type, unit_price, chapters, total_amount,
             book_title, genre, customer_name, customer_email, customer_phone,
             notes, address, status, delivery_deadline,
-            book_id, chapter_ids, transaction_type
+            book_id, chapter_ids, transaction_type, manuscript_files
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NULL, 'unpaid', NULL, %s, %s, 'publishing')
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NULL, 'unpaid', NULL, %s, %s, 'publishing', %s)
         RETURNING id
         """,
         (
@@ -233,6 +241,7 @@ def create_transaction(
             body.notes.strip() if body.notes else None,
             body.book_id,
             json.dumps(body.chapter_ids or []),
+            json.dumps(body.manuscript_files or []),
         ),
     )
     new_id = cur.fetchone()["id"]
@@ -357,6 +366,85 @@ def update_transaction(
 
     fields = ", ".join(f"{k} = %s" for k in updates)
     db.execute(f"UPDATE transactions SET {fields} WHERE id = %s", (*updates.values(), transaction_id))
+    db.commit()
+
+    updated_row = db.execute("SELECT * FROM transactions WHERE id = %s", (transaction_id,)).fetchone()
+    return _to_transaction_out(updated_row)
+
+
+_UPLOADS_DIR = Path(__file__).parent.parent.parent / "uploads"
+_ALLOWED_MANUSCRIPT_EXTS = {"pdf", "doc", "docx"}
+_ALLOWED_MANUSCRIPT_TYPES = {
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
+_MAX_MANUSCRIPT_MB = 20
+
+
+@router.post("/{transaction_id}/upload-manuscript", response_model=TransactionOut)
+async def upload_transaction_manuscript(
+    transaction_id: int,
+    file: UploadFile = File(...),
+    db=Depends(get_db),
+    user: dict = Depends(get_current_user),
+):
+    """Upload a manuscript file and attach it to an existing paid publishing transaction."""
+    row = db.execute("SELECT * FROM transactions WHERE id = %s", (transaction_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    # Ownership check
+    if row["user_id"] != int(user["sub"]) and user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # Only allow upload after payment is confirmed — prevents unauthenticated DDoS
+    if row["status"] != "paid":
+        raise HTTPException(
+            status_code=400,
+            detail="Manuscript upload is only allowed after payment is confirmed.",
+        )
+
+    # Publishing type check
+    if (row.get("transaction_type") or "publishing") != "publishing":
+        raise HTTPException(
+            status_code=400,
+            detail="Manuscript upload is only for publishing service transactions.",
+        )
+
+    # File type validation
+    ext = (file.filename or "").rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else ""
+    if ext not in _ALLOWED_MANUSCRIPT_EXTS:
+        raise HTTPException(
+            status_code=415,
+            detail="Only PDF, DOC, DOCX files are allowed.",
+        )
+
+    contents = await file.read()
+    if len(contents) > _MAX_MANUSCRIPT_MB * 1024 * 1024:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large. Maximum size is {_MAX_MANUSCRIPT_MB} MB.",
+        )
+
+    # Save file to disk
+    safe_name = re.sub(r"[^\w.\-]", "_", Path(file.filename or "file").name)[:80]
+    filename = f"ms_{uuid.uuid4().hex}_{safe_name}"
+    _UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+    (_UPLOADS_DIR / filename).write_bytes(contents)
+    url = f"/uploads/{filename}"
+
+    # Append URL to manuscript_files array
+    try:
+        current_files = json.loads(row.get("manuscript_files") or "[]")
+    except (ValueError, TypeError):
+        current_files = []
+    current_files.append(url)
+
+    db.execute(
+        "UPDATE transactions SET manuscript_files = %s WHERE id = %s",
+        (json.dumps(current_files), transaction_id),
+    )
     db.commit()
 
     updated_row = db.execute("SELECT * FROM transactions WHERE id = %s", (transaction_id,)).fetchone()
