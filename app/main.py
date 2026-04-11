@@ -10,7 +10,7 @@ from app.routers import auth, books, authors, packages, uploads, oauth, genres, 
 UPLOADS_DIR = Path(__file__).parent.parent / "uploads"
 UPLOADS_DIR.mkdir(exist_ok=True)
 
-app = FastAPI(title="Tartila API", version="1.0.0")
+app = FastAPI(title="Tartila API", version="1.0.0", redirect_slashes=False)
 
 app.add_middleware(
     CORSMiddleware,
