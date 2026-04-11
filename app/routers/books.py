@@ -18,6 +18,7 @@ _BOOK_WITH_AUTHOR = """
 def _row_to_book(row) -> dict:
     d = dict(row)
     d["featured"] = bool(d.get("featured", 0))
+    d["is_template"] = bool(d.get("is_template", 0))
     return d
 
 
@@ -26,6 +27,8 @@ def list_books(
     search: Optional[str] = Query(None),
     genre: Optional[str] = Query(None),
     featured: Optional[bool] = Query(None),
+    is_template: Optional[bool] = Query(None),
+    bidang: Optional[str] = Query(None),
     db = Depends(get_db),
 ):
     query = _BOOK_WITH_AUTHOR + " WHERE 1=1"
@@ -43,6 +46,14 @@ def list_books(
     if featured is not None:
         query += " AND b.featured = %s"
         params.append(featured)
+
+    if is_template is not None:
+        query += " AND b.is_template = %s"
+        params.append(is_template)
+
+    if bidang:
+        query += " AND b.bidang = %s"
+        params.append(bidang)
 
     query += " ORDER BY b.id"
     rows = db.execute(query, params).fetchall()
@@ -75,12 +86,12 @@ def create_book(
 
     cur = db.execute(
         """INSERT INTO books
-           (title, author_id, cover, genre, published_year, pages, isbn, description, price, rating, featured)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+           (title, author_id, cover, genre, published_year, pages, isbn, description, price, rating, featured, is_template)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
         (
             body.title, body.author_id, body.cover, body.genre,
             body.published_year, body.pages, body.isbn, body.description,
-            body.price, body.rating, body.featured,
+            body.price, body.rating, body.featured, body.is_template,
         ),
     )
     new_id = cur.fetchone()["id"]
@@ -115,6 +126,8 @@ def update_book(
 
     if "featured" in updates:
         updates["featured"] = bool(updates["featured"])
+    if "is_template" in updates:
+        updates["is_template"] = bool(updates["is_template"])
 
     updates["updated_at"] = "CURRENT_TIMESTAMP"
     fields = ", ".join(

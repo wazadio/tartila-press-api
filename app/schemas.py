@@ -63,6 +63,8 @@ class BookBase(BaseModel):
     price: Optional[int] = 0
     rating: Optional[float] = 0.0
     featured: Optional[bool] = False
+    is_template: Optional[bool] = False
+    bidang: Optional[str] = None
 
 
 class BookCreate(BookBase):
