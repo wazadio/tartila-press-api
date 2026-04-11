@@ -6,10 +6,16 @@ from app.schemas import GenreCreate, GenreOut
 
 router = APIRouter(prefix="/genres", tags=["genres"])
 
+_GENRE_WITH_BIDANG = """
+    SELECT g.*, b.name AS bidang_name
+    FROM genres g
+    LEFT JOIN bidang b ON b.id = g.bidang_id
+"""
+
 
 @router.get("", response_model=list[GenreOut])
 def list_genres(db = Depends(get_db)):
-    rows = db.execute("SELECT * FROM genres ORDER BY name").fetchall()
+    rows = db.execute(_GENRE_WITH_BIDANG + " ORDER BY g.name").fetchall()
     return [dict(r) for r in rows]
 
 
@@ -18,10 +24,13 @@ def create_genre(body: GenreCreate, db = Depends(get_db), _=Depends(require_admi
     existing = db.execute("SELECT id FROM genres WHERE LOWER(name) = LOWER(%s)", (body.name,)).fetchone()
     if existing:
         raise HTTPException(status_code=400, detail="Genre already exists")
-    cur = db.execute("INSERT INTO genres (name, name_id) VALUES (%s, %s) RETURNING id", (body.name, body.name_id))
+    cur = db.execute(
+        "INSERT INTO genres (name, name_id, bidang_id) VALUES (%s, %s, %s) RETURNING id",
+        (body.name, body.name_id, body.bidang_id),
+    )
     new_id = cur.fetchone()["id"]
     db.commit()
-    row = db.execute("SELECT * FROM genres WHERE id = %s", (new_id,)).fetchone()
+    row = db.execute(_GENRE_WITH_BIDANG + " WHERE g.id = %s", (new_id,)).fetchone()
     return dict(row)
 
 
@@ -30,12 +39,17 @@ def update_genre(genre_id: int, body: GenreCreate, db = Depends(get_db), _=Depen
     row = db.execute("SELECT * FROM genres WHERE id = %s", (genre_id,)).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Genre not found")
-    conflict = db.execute("SELECT id FROM genres WHERE LOWER(name) = LOWER(%s) AND id != %s", (body.name, genre_id)).fetchone()
+    conflict = db.execute(
+        "SELECT id FROM genres WHERE LOWER(name) = LOWER(%s) AND id != %s", (body.name, genre_id)
+    ).fetchone()
     if conflict:
         raise HTTPException(status_code=400, detail="Genre name already exists")
-    db.execute("UPDATE genres SET name = %s, name_id = %s WHERE id = %s", (body.name, body.name_id, genre_id))
+    db.execute(
+        "UPDATE genres SET name = %s, name_id = %s, bidang_id = %s WHERE id = %s",
+        (body.name, body.name_id, body.bidang_id, genre_id),
+    )
     db.commit()
-    row = db.execute("SELECT * FROM genres WHERE id = %s", (genre_id,)).fetchone()
+    row = db.execute(_GENRE_WITH_BIDANG + " WHERE g.id = %s", (genre_id,)).fetchone()
     return dict(row)
 
 

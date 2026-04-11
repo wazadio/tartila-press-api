@@ -165,7 +165,23 @@ def init_db():
     cur.execute("ALTER TABLE genres ADD COLUMN IF NOT EXISTS name_id TEXT")
     cur.execute("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS delivery_deadline TEXT")
     cur.execute("ALTER TABLE books ADD COLUMN IF NOT EXISTS is_template BOOLEAN DEFAULT FALSE")
-    cur.execute("ALTER TABLE books ADD COLUMN IF NOT EXISTS bidang TEXT")
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS bidang (
+            id   SERIAL PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    cur.execute("""
+        ALTER TABLE books
+        ADD COLUMN IF NOT EXISTS bidang_id INTEGER REFERENCES bidang(id) ON DELETE SET NULL
+    """)
+    # drop old free-text bidang column if it still exists
+    cur.execute("ALTER TABLE books DROP COLUMN IF EXISTS bidang")
+    cur.execute("""
+        ALTER TABLE genres
+        ADD COLUMN IF NOT EXISTS bidang_id INTEGER REFERENCES bidang(id) ON DELETE SET NULL
+    """)
 
     conn.autocommit = False
     _seed(conn)

@@ -9,9 +9,10 @@ from app.schemas import BookCreate, BookOut, BookUpdate
 router = APIRouter(prefix="/books", tags=["books"])
 
 _BOOK_WITH_AUTHOR = """
-    SELECT b.*, a.name AS author
+    SELECT b.*, a.name AS author, bd.name AS bidang_name
     FROM books b
     LEFT JOIN authors a ON a.id = b.author_id
+    LEFT JOIN bidang bd ON bd.id = b.bidang_id
 """
 
 
@@ -28,7 +29,7 @@ def list_books(
     genre: Optional[str] = Query(None),
     featured: Optional[bool] = Query(None),
     is_template: Optional[bool] = Query(None),
-    bidang: Optional[str] = Query(None),
+    bidang_id: Optional[int] = Query(None),
     db = Depends(get_db),
 ):
     query = _BOOK_WITH_AUTHOR + " WHERE 1=1"
@@ -51,9 +52,9 @@ def list_books(
         query += " AND b.is_template = %s"
         params.append(is_template)
 
-    if bidang:
-        query += " AND b.bidang = %s"
-        params.append(bidang)
+    if bidang_id is not None:
+        query += " AND b.bidang_id = %s"
+        params.append(bidang_id)
 
     query += " ORDER BY b.id"
     rows = db.execute(query, params).fetchall()
@@ -86,12 +87,12 @@ def create_book(
 
     cur = db.execute(
         """INSERT INTO books
-           (title, author_id, cover, genre, published_year, pages, isbn, description, price, rating, featured, is_template)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
+           (title, author_id, cover, genre, published_year, pages, isbn, description, price, rating, featured, is_template, bidang_id)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
         (
             body.title, body.author_id, body.cover, body.genre,
             body.published_year, body.pages, body.isbn, body.description,
-            body.price, body.rating, body.featured, body.is_template,
+            body.price, body.rating, body.featured, body.is_template, body.bidang_id,
         ),
     )
     new_id = cur.fetchone()["id"]

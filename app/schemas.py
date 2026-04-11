@@ -64,7 +64,7 @@ class BookBase(BaseModel):
     rating: Optional[float] = 0.0
     featured: Optional[bool] = False
     is_template: Optional[bool] = False
-    bidang: Optional[str] = None
+    bidang_id: Optional[int] = None
 
 
 class BookCreate(BookBase):
@@ -80,6 +80,21 @@ class BookUpdate(BookBase):
 class BookOut(BookBase):
     id: int
     author: Optional[str] = None       # denormalized author name
+    bidang_name: Optional[str] = None  # denormalized bidang name
+
+    class Config:
+        from_attributes = True
+
+
+# ── Bidang ───────────────────────────────────────────────────────────────────
+
+class BidangCreate(BaseModel):
+    name: str
+
+
+class BidangOut(BidangCreate):
+    id: int
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -126,6 +141,7 @@ class PackageOut(PackageBase):
 class GenreBase(BaseModel):
     name: str
     name_id: Optional[str] = None
+    bidang_id: Optional[int] = None
 
 
 class GenreCreate(GenreBase):
@@ -134,6 +150,7 @@ class GenreCreate(GenreBase):
 
 class GenreOut(GenreBase):
     id: int
+    bidang_name: Optional[str] = None
     created_at: Optional[datetime] = None
 
     class Config:
