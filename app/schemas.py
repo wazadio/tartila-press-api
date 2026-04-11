@@ -67,6 +67,7 @@ class BookBase(BaseModel):
     featured: Optional[bool] = False
     is_template: Optional[bool] = False
     bidang_id: Optional[int] = None
+    stock: Optional[int] = None
 
 
 class BookCreate(BookBase):
@@ -197,6 +198,8 @@ class TransactionCreate(BaseModel):
     customer_email: EmailStr
     customer_phone: str
     notes: Optional[str] = None
+    book_id: Optional[int] = None
+    chapter_ids: Optional[List[int]] = []
 
 
 class TransactionOut(BaseModel):
@@ -222,6 +225,9 @@ class TransactionOut(BaseModel):
     bank_account_name: str
     bank_account_number: str
     created_at: Optional[datetime] = None
+    book_id: Optional[int] = None
+    chapter_ids: Optional[List[int]] = []
+    stock_exhausted: bool = False
 
     class Config:
         from_attributes = True
@@ -244,6 +250,7 @@ class BookChapterBase(BaseModel):
     number: int
     title: str
     price: int = 0
+    stock: Optional[int] = None
 
 
 class BookChapterCreate(BookChapterBase):

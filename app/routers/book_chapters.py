@@ -27,15 +27,23 @@ def replace_book_chapters(
     _=Depends(require_admin),
 ):
     """Replace all sellable chapters for a book in one call."""
-    book = db.execute("SELECT id FROM books WHERE id = %s", (book_id,)).fetchone()
+    book = db.execute("SELECT id, stock FROM books WHERE id = %s", (book_id,)).fetchone()
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
+
+    book_stock = book["stock"]
+    for ch in body:
+        if ch.stock is not None and book_stock is not None and ch.stock > book_stock:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Chapter '{ch.title}' stock ({ch.stock}) cannot exceed book stock ({book_stock}).",
+            )
 
     db.execute("DELETE FROM book_chapters WHERE book_id = %s", (book_id,))
     for ch in body:
         db.execute(
-            "INSERT INTO book_chapters (book_id, number, title, price) VALUES (%s, %s, %s, %s)",
-            (book_id, ch.number, ch.title, ch.price),
+            "INSERT INTO book_chapters (book_id, number, title, price, stock) VALUES (%s, %s, %s, %s, %s)",
+            (book_id, ch.number, ch.title, ch.price, ch.stock),
         )
     db.commit()
 

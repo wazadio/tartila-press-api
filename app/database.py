@@ -192,6 +192,13 @@ def init_db():
     cur.execute("""
         UPDATE authors SET is_verified = TRUE WHERE user_id IS NULL AND is_verified = FALSE
     """)
+    # Stock quota per book and per chapter
+    cur.execute("ALTER TABLE books ADD COLUMN IF NOT EXISTS stock INTEGER DEFAULT NULL")
+    cur.execute("ALTER TABLE book_chapters ADD COLUMN IF NOT EXISTS stock INTEGER DEFAULT NULL")
+    # Store which book/chapters were selected in per-chapter transactions for stock tracking
+    cur.execute("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS book_id INTEGER REFERENCES books(id) ON DELETE SET NULL")
+    cur.execute("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS chapter_ids TEXT NOT NULL DEFAULT '[]'")
+    cur.execute("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS stock_exhausted BOOLEAN NOT NULL DEFAULT FALSE")
 
     conn.autocommit = False
     _seed(conn)

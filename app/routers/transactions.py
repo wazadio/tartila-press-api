@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 from datetime import datetime, timezone
 from typing import Optional
@@ -62,6 +63,13 @@ def _to_transaction_out(row) -> dict:
         out["user_role"] = None
     if "user_is_verified" not in out:
         out["user_is_verified"] = None
+    # parse chapter_ids JSON string → list
+    raw_ids = out.get("chapter_ids", "[]")
+    try:
+        out["chapter_ids"] = json.loads(raw_ids) if isinstance(raw_ids, str) else (raw_ids or [])
+    except (ValueError, TypeError):
+        out["chapter_ids"] = []
+    out["stock_exhausted"] = bool(out.get("stock_exhausted", False))
     return out
 
 
@@ -136,9 +144,10 @@ def create_transaction(
         """
         INSERT INTO transactions (
             user_id, package_id, package_name, package_type, unit_price, chapters, total_amount,
-            book_title, genre, customer_name, customer_email, customer_phone, notes, status, delivery_deadline
+            book_title, genre, customer_name, customer_email, customer_phone, notes, status, delivery_deadline,
+            book_id, chapter_ids
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'unpaid', NULL) RETURNING id
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'unpaid', NULL, %s, %s) RETURNING id
         """,
         (
             user_id,
@@ -154,6 +163,8 @@ def create_transaction(
             body.customer_email,
             body.customer_phone.strip(),
             body.notes.strip() if body.notes else None,
+            body.book_id,
+            json.dumps(body.chapter_ids or []),
         ),
     )
     new_id = cur.fetchone()["id"]
@@ -220,7 +231,51 @@ def update_transaction(
     current_status = row["status"]
     next_status = updates.get("status", current_status)
 
-    # Block setting a non-null deadline when the transaction is or will be paid
+    # ── Stock check when marking as paid ─────────────────────────────────────
+    if next_status == "paid" and current_status != "paid":
+        book_id = row.get("book_id")
+        try:
+            chapter_ids = json.loads(row.get("chapter_ids") or "[]")
+        except (ValueError, TypeError):
+            chapter_ids = []
+
+        stock_problem = None
+
+        if book_id:
+            book_row = db.execute("SELECT title, stock FROM books WHERE id = %s", (book_id,)).fetchone()
+            if book_row and book_row["stock"] is not None and book_row["stock"] <= 0:
+                stock_problem = f"Stok buku '{book_row['title']}' sudah habis."
+
+        if stock_problem is None and chapter_ids:
+            for ch_id in chapter_ids:
+                ch_row = db.execute("SELECT title, stock FROM book_chapters WHERE id = %s", (ch_id,)).fetchone()
+                if ch_row and ch_row["stock"] is not None and ch_row["stock"] <= 0:
+                    stock_problem = f"Stok bab '{ch_row['title']}' sudah habis."
+                    break
+
+        if stock_problem:
+            # Flag the transaction as stock-exhausted and abort status change
+            db.execute(
+                "UPDATE transactions SET stock_exhausted = TRUE WHERE id = %s",
+                (transaction_id,),
+            )
+            db.commit()
+            raise HTTPException(status_code=409, detail=stock_problem)
+
+        # All stock OK — decrement and clear any previous exhausted flag
+        if book_id:
+            db.execute(
+                "UPDATE books SET stock = stock - 1 WHERE id = %s AND stock IS NOT NULL AND stock > 0",
+                (book_id,),
+            )
+        for ch_id in chapter_ids:
+            db.execute(
+                "UPDATE book_chapters SET stock = stock - 1 WHERE id = %s AND stock IS NOT NULL AND stock > 0",
+                (ch_id,),
+            )
+        updates["stock_exhausted"] = False
+    # ─────────────────────────────────────────────────────────────────────────
+
     if (
         "delivery_deadline" in updates
         and updates["delivery_deadline"] is not None
