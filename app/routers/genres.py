@@ -7,13 +7,13 @@ from app.schemas import GenreCreate, GenreOut
 router = APIRouter(prefix="/genres", tags=["genres"])
 
 
-@router.get("/", response_model=list[GenreOut])
+@router.get("", response_model=list[GenreOut])
 def list_genres(db = Depends(get_db)):
     rows = db.execute("SELECT * FROM genres ORDER BY name").fetchall()
     return [dict(r) for r in rows]
 
 
-@router.post("/", response_model=GenreOut, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=GenreOut, status_code=status.HTTP_201_CREATED)
 def create_genre(body: GenreCreate, db = Depends(get_db), _=Depends(require_admin)):
     existing = db.execute("SELECT id FROM genres WHERE LOWER(name) = LOWER(%s)", (body.name,)).fetchone()
     if existing:

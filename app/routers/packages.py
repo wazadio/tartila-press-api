@@ -13,7 +13,7 @@ def _row_to_out(row) -> dict:
     return d
 
 
-@router.get("/", response_model=list[PackageOut])
+@router.get("", response_model=list[PackageOut])
 def list_packages(db=Depends(get_db)):
     rows = db.execute("SELECT * FROM packages ORDER BY type, id").fetchall()
     return [_row_to_out(r) for r in rows]
@@ -27,7 +27,7 @@ def get_package(package_id: int, db=Depends(get_db)):
     return _row_to_out(row)
 
 
-@router.post("/", response_model=PackageOut, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=PackageOut, status_code=status.HTTP_201_CREATED)
 def create_package(body: PackageCreate, db=Depends(get_db), _=Depends(require_admin)):
     cur = db.execute(
         "INSERT INTO packages (name, type, description, price, discount) VALUES (%s,%s,%s,%s,%s) RETURNING id",
