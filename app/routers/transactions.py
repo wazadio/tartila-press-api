@@ -70,6 +70,7 @@ def _to_transaction_out(row) -> dict:
     except (ValueError, TypeError):
         out["chapter_ids"] = []
     out["stock_exhausted"] = bool(out.get("stock_exhausted", False))
+    out["transaction_type"] = out.get("transaction_type") or "publishing"
     return out
 
 
@@ -112,6 +113,81 @@ def create_transaction(
     db = Depends(get_db),
     authorization: Optional[str] = Header(default=None),
 ):
+    user_id = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split(" ", 1)[1].strip()
+        payload = decode_token(token)
+        if payload and payload.get("sub"):
+            try:
+                user_id = int(payload["sub"])
+            except (TypeError, ValueError):
+                user_id = None
+
+    # ── Book sale (catalog purchase) ─────────────────────────────────────────
+    if body.transaction_type == "book_sale":
+        if not body.book_id:
+            raise HTTPException(status_code=400, detail="book_id required for book_sale")
+
+        book_row = db.execute("SELECT * FROM books WHERE id = %s", (body.book_id,)).fetchone()
+        if not book_row:
+            raise HTTPException(status_code=404, detail="Book not found")
+
+        qty = max(1, int(body.quantity or 1))
+        if book_row["stock"] is not None and book_row["stock"] < qty:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Insufficient stock")
+
+        unit_price = int(book_row["price"] or 0)
+        total_amount = unit_price * qty
+
+        cur = db.execute(
+            """
+            INSERT INTO transactions (
+                user_id, package_id, package_name, package_type, unit_price, chapters, total_amount,
+                book_title, genre, customer_name, customer_email, customer_phone,
+                notes, address, status, delivery_deadline,
+                book_id, chapter_ids, transaction_type
+            )
+            VALUES (%s, NULL, %s, 'per_book', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'unpaid', NULL, %s, '[]', 'book_sale')
+            RETURNING id
+            """,
+            (
+                user_id,
+                book_row["title"],
+                unit_price,
+                qty,
+                total_amount,
+                book_row["title"],
+                book_row.get("genre", ""),
+                body.customer_name.strip(),
+                body.customer_email,
+                body.customer_phone.strip(),
+                body.notes.strip() if body.notes else None,
+                body.address.strip() if body.address else None,
+                book_row["id"],
+            ),
+        )
+        new_id = cur.fetchone()["id"]
+
+        if book_row["stock"] is not None:
+            db.execute("UPDATE books SET stock = stock - %s WHERE id = %s", (qty, book_row["id"]))
+
+        db.commit()
+        row = db.execute("SELECT * FROM transactions WHERE id = %s", (new_id,)).fetchone()
+        background_tasks.add_task(
+            _send_payment_invoice,
+            body.customer_email,
+            body.customer_name.strip(),
+            int(row["id"]),
+            str(row["package_name"]),
+            int(row["total_amount"]),
+            str(row["status"]),
+        )
+        return _to_transaction_out(row)
+
+    # ── Publishing service ────────────────────────────────────────────────────
+    if not body.package_id:
+        raise HTTPException(status_code=400, detail="package_id required for publishing transaction")
+
     package_row = db.execute("SELECT * FROM packages WHERE id = %s", (body.package_id,)).fetchone()
     if not package_row:
         raise HTTPException(status_code=404, detail="Package not found")
@@ -130,24 +206,16 @@ def create_transaction(
         chapters = 1
         total_amount = unit_price
 
-    user_id = None
-    if authorization and authorization.startswith("Bearer "):
-        token = authorization.split(" ", 1)[1].strip()
-        payload = decode_token(token)
-        if payload and payload.get("sub"):
-            try:
-                user_id = int(payload["sub"])
-            except (TypeError, ValueError):
-                user_id = None
-
     cur = db.execute(
         """
         INSERT INTO transactions (
             user_id, package_id, package_name, package_type, unit_price, chapters, total_amount,
-            book_title, genre, customer_name, customer_email, customer_phone, notes, status, delivery_deadline,
-            book_id, chapter_ids
+            book_title, genre, customer_name, customer_email, customer_phone,
+            notes, address, status, delivery_deadline,
+            book_id, chapter_ids, transaction_type
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'unpaid', NULL, %s, %s) RETURNING id
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NULL, 'unpaid', NULL, %s, %s, 'publishing')
+        RETURNING id
         """,
         (
             user_id,
@@ -157,8 +225,8 @@ def create_transaction(
             unit_price,
             chapters,
             total_amount,
-            body.book_title.strip(),
-            body.genre.strip(),
+            (body.book_title or "").strip(),
+            (body.genre or "").strip(),
             body.customer_name.strip(),
             body.customer_email,
             body.customer_phone.strip(),

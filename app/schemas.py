@@ -190,9 +190,10 @@ class WriterUpdate(BaseModel):
 # ── Transaction ───────────────────────────────────────────────────────────────
 
 class TransactionCreate(BaseModel):
-    package_id: int
-    book_title: str
-    genre: str
+    # publishing service order (package_id required when transaction_type='publishing')
+    package_id: Optional[int] = None
+    book_title: Optional[str] = None
+    genre: Optional[str] = None
     chapters: Optional[int] = 1
     customer_name: str
     customer_email: EmailStr
@@ -200,6 +201,10 @@ class TransactionCreate(BaseModel):
     notes: Optional[str] = None
     book_id: Optional[int] = None
     chapter_ids: Optional[List[int]] = []
+    # book sale fields
+    transaction_type: Literal["publishing", "book_sale"] = "publishing"
+    quantity: Optional[int] = None   # for book_sale; maps to chapters
+    address: Optional[str] = None    # delivery address for book_sale
 
 
 class TransactionOut(BaseModel):
@@ -219,6 +224,7 @@ class TransactionOut(BaseModel):
     customer_email: EmailStr
     customer_phone: str
     notes: Optional[str] = None
+    address: Optional[str] = None
     status: Literal["paid", "unpaid"]
     delivery_deadline: Optional[date] = None
     bank_name: str
@@ -228,6 +234,7 @@ class TransactionOut(BaseModel):
     book_id: Optional[int] = None
     chapter_ids: Optional[List[int]] = []
     stock_exhausted: bool = False
+    transaction_type: str = "publishing"
 
     class Config:
         from_attributes = True
