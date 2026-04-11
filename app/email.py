@@ -42,7 +42,7 @@ async def send_welcome_email(to: str, name: str):
                 </a>
             </div>
             <div style="padding: 1rem; text-align: center; color: #6B6878; font-size: 0.8rem;">
-                © {2024} Tartila Book Publisher. All rights reserved.
+                © {2024} Tartilapress. All rights reserved.
             </div>
         </div>
         """,
@@ -75,7 +75,7 @@ async def send_verification_email(to: str, name: str, verify_link: str):
                 </p>
             </div>
             <div style="padding: 1rem; text-align: center; color: #6B6878; font-size: 0.8rem;">
-                © 2024 Tartila Book Publisher. All rights reserved.
+                © 2024 Tartilapress. All rights reserved.
             </div>
         </div>
         """,
@@ -108,7 +108,7 @@ async def send_password_reset_email(to: str, name: str, reset_link: str):
                 </p>
             </div>
             <div style="padding: 1rem; text-align: center; color: #6B6878; font-size: 0.8rem;">
-                © 2024 Tartila Book Publisher. All rights reserved.
+                © 2024 Tartilapress. All rights reserved.
             </div>
         </div>
         """,
@@ -157,7 +157,7 @@ async def send_payment_invoice_email(
                 </p>
             </div>
             <div style="padding: 1rem; text-align: center; color: #6B6878; font-size: 0.8rem;">
-                © 2024 Tartila Book Publisher. All rights reserved.
+                © 2024 Tartilapress. All rights reserved.
             </div>
         </div>
         """,
