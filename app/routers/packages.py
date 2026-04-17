@@ -15,7 +15,7 @@ def _row_to_out(row) -> dict:
 
 @router.get("", response_model=list[PackageOut])
 def list_packages(db=Depends(get_db)):
-    rows = db.execute("SELECT * FROM packages ORDER BY type, id").fetchall()
+    rows = db.execute("SELECT * FROM packages ORDER BY sort_order, id").fetchall()
     return [_row_to_out(r) for r in rows]
 
 
@@ -30,8 +30,8 @@ def get_package(package_id: int, db=Depends(get_db)):
 @router.post("", response_model=PackageOut, status_code=status.HTTP_201_CREATED)
 def create_package(body: PackageCreate, db=Depends(get_db), _=Depends(require_admin)):
     cur = db.execute(
-        "INSERT INTO packages (name, type, description, price, discount) VALUES (%s,%s,%s,%s,%s) RETURNING id",
-        (body.name, body.type, body.description, body.price, body.discount),
+        "INSERT INTO packages (name, type, description, price, discount, sort_order, is_featured) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+        (body.name, body.type, body.description, body.price, body.discount, body.sort_order, body.is_featured),
     )
     new_id = cur.fetchone()["id"]
     db.commit()
@@ -50,8 +50,8 @@ def update_package(package_id: int, body: PackageUpdate, db=Depends(get_db), _=D
     data.update(updates)
 
     db.execute(
-        "UPDATE packages SET name=%s, type=%s, description=%s, price=%s, discount=%s WHERE id=%s",
-        (data["name"], data["type"], data["description"], data["price"], data["discount"], package_id),
+        "UPDATE packages SET name=%s, type=%s, description=%s, price=%s, discount=%s, sort_order=%s, is_featured=%s WHERE id=%s",
+        (data["name"], data["type"], data["description"], data["price"], data["discount"], data["sort_order"], data["is_featured"], package_id),
     )
     db.commit()
     row = db.execute("SELECT * FROM packages WHERE id = %s", (package_id,)).fetchone()

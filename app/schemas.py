@@ -111,6 +111,8 @@ class PackageBase(BaseModel):
     description: Optional[str] = None
     price: int
     discount: int = 0
+    sort_order: int = 0
+    is_featured: bool = False
 
     @field_validator("discount")
     @classmethod
@@ -129,6 +131,8 @@ class PackageUpdate(PackageBase):
     type: Optional[Literal["per_chapter", "per_book"]] = None
     price: Optional[int] = None
     discount: Optional[int] = None
+    sort_order: Optional[int] = None
+    is_featured: Optional[bool] = None
 
 
 class PackageOut(PackageBase):
