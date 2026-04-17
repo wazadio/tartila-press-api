@@ -204,6 +204,25 @@ def init_db():
     cur.execute("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS manuscript_files TEXT NOT NULL DEFAULT '[]'")
     cur.execute("ALTER TABLE packages ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0")
     cur.execute("ALTER TABLE packages ADD COLUMN IF NOT EXISTS is_featured BOOLEAN NOT NULL DEFAULT FALSE")
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(30)")
+
+    # Pencipta (creator) fields on authors table
+    cur.execute("ALTER TABLE authors ADD COLUMN IF NOT EXISTS nik VARCHAR(20)")
+    cur.execute("ALTER TABLE authors ADD COLUMN IF NOT EXISTS gender VARCHAR(20)")
+    cur.execute("ALTER TABLE authors ADD COLUMN IF NOT EXISTS npwp VARCHAR(25)")
+    cur.execute("ALTER TABLE authors ADD COLUMN IF NOT EXISTS address TEXT")
+    cur.execute("ALTER TABLE authors ADD COLUMN IF NOT EXISTS country TEXT DEFAULT 'Indonesia'")
+    cur.execute("ALTER TABLE authors ADD COLUMN IF NOT EXISTS province TEXT")
+    cur.execute("ALTER TABLE authors ADD COLUMN IF NOT EXISTS province_id TEXT")
+    cur.execute("ALTER TABLE authors ADD COLUMN IF NOT EXISTS regency TEXT")
+    cur.execute("ALTER TABLE authors ADD COLUMN IF NOT EXISTS regency_id TEXT")
+    cur.execute("ALTER TABLE authors ADD COLUMN IF NOT EXISTS district TEXT")
+    cur.execute("ALTER TABLE authors ADD COLUMN IF NOT EXISTS district_id TEXT")
+    cur.execute("ALTER TABLE authors ADD COLUMN IF NOT EXISTS postal_code VARCHAR(10)")
+    cur.execute("ALTER TABLE authors ADD COLUMN IF NOT EXISTS ktp_photo TEXT")
+
+    # Drop old creator_profiles table if it exists (replaced by authors columns)
+    cur.execute("DROP TABLE IF EXISTS creator_profiles")
 
     conn.autocommit = False
     _seed(conn)

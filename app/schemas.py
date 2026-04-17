@@ -172,11 +172,29 @@ class WriterRegisterRequest(BaseModel):
     password: str
 
 
+class UpdateProfileRequest(BaseModel):
+    phone: Optional[str] = None
+
+
 class WriterOut(AuthorBase):
     id: int
     user_id: int
     email: str
     created_at: Optional[datetime] = None
+    # Pencipta fields
+    nik: Optional[str] = None
+    gender: Optional[str] = None
+    npwp: Optional[str] = None
+    address: Optional[str] = None
+    country: Optional[str] = None
+    province: Optional[str] = None
+    province_id: Optional[str] = None
+    regency: Optional[str] = None
+    regency_id: Optional[str] = None
+    district: Optional[str] = None
+    district_id: Optional[str] = None
+    postal_code: Optional[str] = None
+    ktp_photo: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -189,6 +207,20 @@ class WriterUpdate(BaseModel):
     nationality: Optional[str] = None
     genres: Optional[List[str]] = None
     website: Optional[str] = None
+    # Pencipta fields
+    nik: Optional[str] = None
+    gender: Optional[str] = None
+    npwp: Optional[str] = None
+    address: Optional[str] = None
+    country: Optional[str] = None
+    province: Optional[str] = None
+    province_id: Optional[str] = None
+    regency: Optional[str] = None
+    regency_id: Optional[str] = None
+    district: Optional[str] = None
+    district_id: Optional[str] = None
+    postal_code: Optional[str] = None
+    ktp_photo: Optional[str] = None
 
 
 # ── Transaction ───────────────────────────────────────────────────────────────

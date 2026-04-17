@@ -12,7 +12,7 @@ from app.auth import (
 )
 from app.database import get_db
 from app.email import send_verification_email, send_welcome_email
-from app.schemas import LoginRequest, RegisterRequest, TokenResponse, WriterRegisterRequest
+from app.schemas import LoginRequest, RegisterRequest, TokenResponse, WriterRegisterRequest, UpdateProfileRequest
 import json
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
@@ -142,7 +142,18 @@ def login(body: LoginRequest, db = Depends(get_db)):
 
 @router.get("/me")
 def me(user: dict = Depends(get_current_user), db = Depends(get_db)):
-    row = db.execute("SELECT id, name, email, role, is_verified FROM users WHERE id = %s", (user["sub"],)).fetchone()
+    row = db.execute("SELECT id, name, email, role, is_verified, phone FROM users WHERE id = %s", (user["sub"],)).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="User not found")
     return dict(row)
+
+
+@router.patch("/me")
+def update_me(body: UpdateProfileRequest, user: dict = Depends(get_current_user), db = Depends(get_db)):
+    row = db.execute("SELECT id FROM users WHERE id = %s", (user["sub"],)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="User not found")
+    db.execute("UPDATE users SET phone = %s WHERE id = %s", (body.phone, user["sub"]))
+    db.commit()
+    updated = db.execute("SELECT id, name, email, role, is_verified, phone FROM users WHERE id = %s", (user["sub"],)).fetchone()
+    return dict(updated)

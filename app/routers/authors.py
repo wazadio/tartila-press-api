@@ -42,6 +42,20 @@ def _row_to_writer(row) -> dict:
         "website": row["website"],
         "email": row["email"],
         "created_at": row["created_at"],
+        # Pencipta fields
+        "nik": row.get("nik"),
+        "gender": row.get("gender"),
+        "npwp": row.get("npwp"),
+        "address": row.get("address"),
+        "country": row.get("country"),
+        "province": row.get("province"),
+        "province_id": row.get("province_id"),
+        "regency": row.get("regency"),
+        "regency_id": row.get("regency_id"),
+        "district": row.get("district"),
+        "district_id": row.get("district_id"),
+        "postal_code": row.get("postal_code"),
+        "ktp_photo": row.get("ktp_photo"),
     }
 
 
@@ -52,6 +66,9 @@ def list_writers(db = Depends(get_db), _: dict = Depends(require_admin)):
     rows = db.execute("""
         SELECT a.id, a.user_id, a.name, a.photo, a.bio, a.nationality,
                a.books_published, a.genres, a.website, a.created_at,
+               a.nik, a.gender, a.npwp, a.address, a.country,
+               a.province, a.province_id, a.regency, a.regency_id,
+               a.district, a.district_id, a.postal_code, a.ktp_photo,
                u.email
         FROM authors a
         JOIN users u ON u.id = a.user_id
@@ -66,6 +83,9 @@ def get_my_profile(db = Depends(get_db), user: dict = Depends(require_writer)):
     row = db.execute("""
         SELECT a.id, a.user_id, a.name, a.photo, a.bio, a.nationality,
                a.books_published, a.genres, a.website, a.created_at,
+               a.nik, a.gender, a.npwp, a.address, a.country,
+               a.province, a.province_id, a.regency, a.regency_id,
+               a.district, a.district_id, a.postal_code, a.ktp_photo,
                u.email
         FROM authors a
         JOIN users u ON u.id = a.user_id
@@ -95,6 +115,13 @@ def update_my_profile(body: WriterUpdate, db = Depends(get_db), user: dict = Dep
         updates["genres"] = json.dumps(body.genres)
     if body.website is not None:
         updates["website"] = body.website
+    # Pencipta fields
+    for field in ("nik", "gender", "npwp", "address", "country",
+                  "province", "province_id", "regency", "regency_id",
+                  "district", "district_id", "postal_code", "ktp_photo"):
+        val = getattr(body, field, None)
+        if val is not None:
+            updates[field] = val
 
     if updates:
         sets = ", ".join(f"{k} = %s" for k in updates)
@@ -105,6 +132,9 @@ def update_my_profile(body: WriterUpdate, db = Depends(get_db), user: dict = Dep
     updated = db.execute("""
         SELECT a.id, a.user_id, a.name, a.photo, a.bio, a.nationality,
                a.books_published, a.genres, a.website, a.created_at,
+               a.nik, a.gender, a.npwp, a.address, a.country,
+               a.province, a.province_id, a.regency, a.regency_id,
+               a.district, a.district_id, a.postal_code, a.ktp_photo,
                u.email
         FROM authors a JOIN users u ON u.id = a.user_id WHERE a.user_id = %s
     """, (user["sub"],)).fetchone()
