@@ -209,7 +209,21 @@ def create_transaction(
         raise HTTPException(status_code=400, detail="chapters must be at least 1")
 
     if package_row["type"] == "per_chapter":
-        total_amount = unit_price * chapters
+        # If specific chapters were selected, sum their individual prices from DB
+        chapter_ids = body.chapter_ids or []
+        if chapter_ids:
+            chapter_rows = db.execute(
+                f"SELECT id, price FROM book_chapters WHERE id = ANY(%s::int[])",
+                (chapter_ids,),
+            ).fetchall()
+            price_map = {r["id"]: int(r["price"] or 0) for r in chapter_rows}
+            total_amount = sum(
+                round(price_map[cid] * (1 - package_discount / 100)) if price_map.get(cid, 0) > 0 else unit_price
+                for cid in chapter_ids
+            )
+            chapters = len(chapter_ids)
+        else:
+            total_amount = unit_price * chapters
     else:
         chapters = 1
         total_amount = unit_price
